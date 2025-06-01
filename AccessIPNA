@@ -1,1 +1,58 @@
-Acc
+# Load the required libraries
+library(httr)
+library(jsonlite)  # Useful for handling JSON data
+library(purrr)     # For working with lists
+library(dplyr)     # For data manipulation
+
+# Define the API URL and API Key
+api_url <- "https://ipna.citycancerchallenge.org/api/doc/external/02006818BB8E4B9F9B4AA62401E0B3A7/flat"
+api_key <- "9332077b-8c21-48b9-8252-a20a540f9377"
+
+# Make the GET request to the API with the API key in the header
+response <- GET(api_url, add_headers(Authorization = paste("Bearer", api_key)))
+
+# Check the status of the response
+if (status_code(response) == 200) {
+  # Parse the response content
+  data <- content(response, "parsed")
+  
+  # Print the structure of the data for debugging
+  print(str(data))
+  
+  # Ensure data is a list and remove NULL or empty elements
+  if (is.list(data)) {
+    # Filter out NULL or empty entries
+    data <- keep(data, ~length(.x) > 0)
+    
+    # Check if the data contains lists of lists
+    if (all(sapply(data, is.list))) {
+      # If data is a list of lists, ensure consistent fields and flatten each sublist
+      # Use map_df to convert to a data frame
+      data_df <- map_df(data, function(item) {
+        # Convert each sublist to a data frame row, filling missing columns with NA
+        item_df <- as.data.frame(t(item), stringsAsFactors = FALSE)
+        # Unnest if necessary
+        flatten(item_df)
+      })
+      
+      # Replace NULL with NA for consistency
+      data_df <- data_df %>% mutate(across(everything(), ~replace(., is.null(.), NA)))
+      
+      # Print the first few rows of the data frame to check its structure
+      print(head(data_df))
+      
+      # Save the data frame to a CSV file
+      write.csv(data_df, file = "api_data.csv", row.names = FALSE)
+      
+      print("Data has been successfully saved to api_data.csv")
+    } else {
+      print("Error: Data structure is not as expected.")
+    }
+  } else {
+    print("Error: Data is not in expected list format.")
+  }
+} else {
+  # Print an error message if the request was not successful
+  print(paste("Error:", status_code(response), " - ", http_status(response)$message))
+}
+
